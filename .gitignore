@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.venv-build/
+venv/
+env/
+
+# Local app data and generated media
+data/
+uploads/
+outputs/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.m4v
+
+# Build/package artifacts
+build/
+dist/
+bundle/
+*.app/
+*.dmg
+*.spec
+
+# macOS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.p12
+*.cer
+*.key
+*.mobileprovision

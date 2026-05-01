@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Datamosher</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 900;
+      letter-spacing: -2px;
+      color: #fff;
+      text-shadow: 0 0 30px #ff00ff88, 0 0 60px #00ffff44;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 0.85rem;
+      margin-bottom: 40px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .card {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 32px;
+      width: 100%;
+      max-width: 640px;
+      margin-bottom: 24px;
+    }
+
+    /* Drop zone */
+    #dropzone {
+      border: 2px dashed #333;
+      border-radius: 10px;
+      padding: 60px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #dropzone:hover, #dropzone.drag-over {
+      border-color: #ff00ff;
+      background: #1a001a;
+      box-shadow: inset 0 0 30px #ff00ff11;
+    }
+
+    #dropzone .icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    #dropzone p { color: #555; font-size: 0.9rem; }
+    #dropzone strong { color: #888; }
+
+    #file-input { display: none; }
+
+    /* File info */
+    #file-info {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: #0d0d0d;
+      border: 1px solid #222;
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+
+    #file-info .file-icon { font-size: 1.8rem; }
+    #file-info .file-name { font-weight: bold; color: #ccc; font-size: 0.9rem; }
+    #file-info .file-size { color: #555; font-size: 0.8rem; }
+    #file-info .remove-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: #444;
+      cursor: pointer;
+      font-size: 1.2rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    #file-info .remove-btn:hover { color: #ff4444; background: #1a0000; }
+
+    /* Controls */
+    .section-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: #444;
+      margin-bottom: 16px;
+    }
+
+    .control-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    label .value {
+      color: #ff00ff;
+      font-weight: bold;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: #222;
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #ff00ff;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 8px #ff00ff88;
+    }
+
+    /* Mode selector */
+    .mode-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .mode-btn {
+      background: #0d0d0d;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      color: #666;
+    }
+
+    .mode-btn:hover { border-color: #444; color: #aaa; }
+
+    .mode-btn.active {
+      border-color: #ff00ff;
+      color: #ff00ff;
+      background: #1a001a;
+      box-shadow: 0 0 12px #ff00ff22;
+    }
+
+    .mode-btn .mode-name { font-size: 0.85rem; font-weight: bold; }
+    .mode-btn .mode-desc { font-size: 0.7rem; color: #444; margin-top: 4px; }
+    .mode-btn.active .mode-desc { color: #882288; }
+
+    /* Button */
+    #mosh-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #ff00ff, #8800ff);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-family: 'Courier New', monospace;
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      margin-top: 24px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px #ff00ff44;
+    }
+
+    #mosh-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px #ff00ff66;
+    }
+
+    #mosh-btn:disabled {
+      background: #222;
+      color: #444;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* Progress */
+    #progress-section {
+      display: none;
+    }
+
+    .progress-bar-wrap {
+      background: #111;
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #ff00ff, #00ffff);
+      border-radius: 4px;
+      transition: width 0.3s;
+      width: 0%;
+    }
+
+    .progress-bar.indeterminate {
+      animation: shimmer 1.5s infinite;
+      width: 100%;
+    }
+
+    @keyframes shimmer {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+
+    .status-text { color: #666; font-size: 0.8rem; }
+
+    /* Result */
+    #result-section { display: none; }
+
+    .result-video {
+      width: 100%;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      background: #000;
+    }
+
+    .download-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: #0d1a0d;
+      border: 1px solid #00ff44;
+      border-radius: 8px;
+      color: #00ff44;
+      text-align: center;
+      text-decoration: none;
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+
+    .download-btn:hover {
+      background: #001a00;
+      box-shadow: 0 0 20px #00ff4422;
+    }
+
+    .mosh-again-btn {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: none;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #555;
+      text-align: center;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+    }
+
+    .mosh-again-btn:hover { border-color: #555; color: #888; }
+
+    /* Error */
+    .error-box {
+      background: #1a0000;
+      border: 1px solid #440000;
+      border-radius: 8px;
+      padding: 16px;
+      color: #ff4444;
+      font-size: 0.85rem;
+      display: none;
+      margin-top: 16px;
+    }
+
+    /* Glitch animation on title */
+    @keyframes glitch {
+      0%, 95%, 100% { text-shadow: 0 0 30px #ff00ff88, 0 0 60px #00ffff44; transform: none; }
+      96% { text-shadow: -3px 0 #ff00ff, 3px 0 #00ffff; transform: translateX(2px); }
+      97% { text-shadow: 3px 0 #ff00ff, -3px 0 #00ffff; transform: translateX(-2px); }
+      98% { text-shadow: 0 0 30px #ff00ff88; transform: none; }
+    }
+
+    h1 { animation: glitch 4s infinite; }
+  </style>
+</head>
+<body>
+
+  <h1>DATAMOSHER</h1>
+  <p class="subtitle">corrupt video. embrace the glitch.</p>
+
+  <div class="card">
+    <div id="dropzone">
+      <span class="icon">📼</span>
+      <strong>Drop MP4 here</strong>
+      <p>or click to choose file</p>
+      <p style="margin-top:8px;font-size:0.75rem;color:#333">mp4 · mov · avi · mkv · webm</p>
+    </div>
+    <input type="file" id="file-input" accept="video/*">
+
+    <div id="file-info">
+      <span class="file-icon">🎬</span>
+      <div>
+        <div class="file-name" id="fname"></div>
+        <div class="file-size" id="fsize"></div>
+      </div>
+      <button class="remove-btn" id="remove-btn">✕</button>
+    </div>
+
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Effect Mode</div>
+    <div class="mode-grid">
+      <div class="mode-btn active" data-mode="iframe_removal">
+        <div class="mode-name">Motion Datamosh</div>
+        <div class="mode-desc">Real P-frame smear at cuts.</div>
+      </div>
+      <div class="mode-btn" data-mode="pixel_drift">
+        <div class="mode-name">Pixel Drift</div>
+        <div class="mode-desc">Ghosting & frame echo.</div>
+      </div>
+      <div class="mode-btn" data-mode="color_bleed">
+        <div class="mode-name">Color Bleed</div>
+        <div class="mode-desc">Chroma shift & smear.</div>
+      </div>
+      <div class="mode-btn" data-mode="feedback">
+        <div class="mode-name">Feedback Loop</div>
+        <div class="mode-desc">Phoenix blend + saturate.</div>
+      </div>
+    </div>
+
+    <div class="control-group" style="margin-top:24px">
+      <label>
+        Intensity
+        <span class="value" id="intensity-val">50%</span>
+      </label>
+      <input type="range" id="intensity" min="0" max="100" value="50">
+    </div>
+
+    <button id="mosh-btn" disabled>DATAMOSH IT</button>
+  </div>
+
+  <div class="card" id="progress-section">
+    <div class="section-title">Processing</div>
+    <div class="status-text" id="status-text">Uploading...</div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar indeterminate" id="progress-bar"></div>
+    </div>
+  </div>
+
+  <div class="card" id="result-section">
+    <div class="section-title">Result</div>
+    <video class="result-video" id="result-video" controls></video>
+    <a class="download-btn" id="download-link" href="#">⬇ Download Moshed Video</a>
+    <button class="mosh-again-btn" id="mosh-again-btn">Mosh Again with Different Settings</button>
+  </div>
+
+  <script>
+    let uploadedId = null;
+    let uploadedFilename = null;
+    let selectedMode = 'iframe_removal';
+    let selectedFile = null;
+
+    // Drop zone
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) handleFileSelect(file);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) handleFileSelect(fileInput.files[0]);
+    });
+
+    document.getElementById('remove-btn').addEventListener('click', () => {
+      selectedFile = null;
+      uploadedId = null;
+      uploadedFilename = null;
+      document.getElementById('file-info').style.display = 'none';
+      dropzone.style.display = 'block';
+      document.getElementById('mosh-btn').disabled = true;
+      fileInput.value = '';
+      hideError();
+    });
+
+    function handleFileSelect(file) {
+      selectedFile = file;
+      uploadedId = null;
+      uploadedFilename = null;
+      document.getElementById('fname').textContent = file.name;
+      document.getElementById('fsize').textContent = formatBytes(file.size);
+      document.getElementById('file-info').style.display = 'flex';
+      dropzone.style.display = 'none';
+      document.getElementById('mosh-btn').disabled = false;
+      hideError();
+    }
+
+    // Mode buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedMode = btn.dataset.mode;
+      });
+    });
+
+    // Intensity slider
+    const intensitySlider = document.getElementById('intensity');
+    intensitySlider.addEventListener('input', () => {
+      document.getElementById('intensity-val').textContent = intensitySlider.value + '%';
+    });
+
+    // Mosh button
+    document.getElementById('mosh-btn').addEventListener('click', async () => {
+      if (!selectedFile) return;
+      hideError();
+      document.getElementById('result-section').style.display = 'none';
+
+      setStatus('Uploading...', true);
+
+      try {
+        // Upload if not already uploaded
+        if (!uploadedId) {
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+          const uploadRes = await fetch('/upload', { method: 'POST', body: formData });
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok) throw new Error(uploadData.error || 'Upload failed');
+          uploadedId = uploadData.id;
+          uploadedFilename = uploadData.filename;
+        }
+
+        setStatus('Datamoshing... this may take a moment...', true);
+
+        const params = {
+          mode: selectedMode,
+          intensity: intensitySlider.value / 100,
+        };
+
+        const moshRes = await fetch('/mosh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: uploadedId, filename: uploadedFilename, params })
+        });
+        const moshData = await moshRes.json();
+        if (!moshRes.ok) throw new Error(moshData.error || 'Mosh failed');
+
+        const outputId = moshData.output_id;
+        const dlUrl = `/download/${outputId}`;
+
+        document.getElementById('result-video').src = dlUrl;
+        document.getElementById('download-link').href = dlUrl;
+        document.getElementById('progress-section').style.display = 'none';
+        document.getElementById('result-section').style.display = 'block';
+        document.getElementById('result-section').scrollIntoView({ behavior: 'smooth' });
+
+      } catch (err) {
+        document.getElementById('progress-section').style.display = 'none';
+        showError(err.message);
+      }
+    });
+
+    document.getElementById('mosh-again-btn').addEventListener('click', () => {
+      document.getElementById('result-section').style.display = 'none';
+      document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    function setStatus(text, show) {
+      document.getElementById('status-text').textContent = text;
+      document.getElementById('progress-section').style.display = show ? 'block' : 'none';
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('error-box');
+      box.textContent = 'Error: ' + msg;
+      box.style.display = 'block';
+    }
+
+    function hideError() {
+      document.getElementById('error-box').style.display = 'none';
+    }
+
+    function formatBytes(b) {
+      if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+      return (b/1024/1024).toFixed(1) + ' MB';
+    }
+  </script>
+</body>
+</html>
