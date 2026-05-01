@@ -6,6 +6,30 @@ Datamosher runs a small Flask server on your machine, lets you upload a video, a
 
 Built for the Hermes Agent hackathon.
 
+## Demo
+
+![Datamosher UI](docs/images/ui.png)
+
+Demo video: TODO - add your YouTube/Vimeo/Loom/GitHub Release link here after recording the submission demo.
+
+Suggested demo flow:
+
+1. Start the app with `python app.py`.
+2. Open `http://127.0.0.1:5555/`.
+3. Upload a short video with obvious hard cuts and motion.
+4. Choose `Motion Datamosh`.
+5. Render and show the before/after output.
+
+Screenshots can go in `docs/images/`. Avoid committing large raw videos to git.
+
+## Hermes Agent Hackathon
+
+Datamosher was built with Hermes Agent as an AI coding partner. Hermes helped iterate on the Flask app, the ffmpeg/MPEG4 datamoshing pipeline, macOS packaging experiments, debugging, security cleanup, and open-source release prep.
+
+The main hackathon angle: a practical creative video tool that uses classic motion-vector datamoshing techniques through a simple local web UI.
+
+See `HACKATHON.md` for submission notes, demo guidance, and known limitations.
+
 ## Effects
 
 - Motion Datamosh: MPEG4 P-frame duplication plus I-VOP stripping for real motion-vector smear at scene cuts.
@@ -94,9 +118,27 @@ To change the max upload size in MB:
 DATAMOSHER_MAX_UPLOAD_MB=1000 python app.py
 ```
 
+If ffmpeg or ffprobe are not on PATH, set explicit paths:
+
+```bash
+FFMPEG_BINARY=/opt/homebrew/bin/ffmpeg FFPROBE_BINARY=/opt/homebrew/bin/ffprobe python app.py
+```
+
 ## How the motion datamosh works
 
 The main effect follows the classic datamosh approach:
+
+```text
+Upload video
+  -> detect scene cuts
+  -> encode MPEG4 segments with no B-frames
+  -> duplicate P-VOP frames around cuts
+  -> strip the next segment's I-VOP
+  -> decode motion vectors against the previous image
+  -> re-encode to H.264 MP4 for browser playback
+```
+
+Detailed steps:
 
 1. Detect scene cuts with ffmpeg.
 2. Encode clip segments as MPEG4 with no B-frames and no scene keyframes.
@@ -107,6 +149,14 @@ The main effect follows the classic datamosh approach:
 7. Re-encode to H.264 MP4 for browser playback.
 
 If no hard cuts are detected, the app creates artificial split points so one-shot clips can still produce an effect.
+
+## Known limitations
+
+- Large videos can take a while to process.
+- The strongest motion datamosh effect appears when the source video has hard cuts and visible motion.
+- ffmpeg/ffprobe must be installed separately.
+- The app is local-only and is not intended to be deployed publicly as-is.
+- This repository is the open-source Flask web app version, not a packaged macOS `.app` release.
 
 ## Development
 
@@ -121,6 +171,12 @@ Quick server check:
 ```bash
 python app.py
 curl http://127.0.0.1:5555/
+```
+
+Health/dependency check:
+
+```bash
+curl http://127.0.0.1:5555/health
 ```
 
 ## Security / privacy notes

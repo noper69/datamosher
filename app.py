@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import subprocess
 import uuid
 import json
@@ -13,8 +14,14 @@ def resource_path(*parts):
 
 BASE_DIR = resource_path()
 DATA_DIR = os.environ.get('DATAMOSHER_DATA_DIR', os.path.join(BASE_DIR, 'data'))
-FFMPEG = resource_path('bin', 'ffmpeg') if os.path.exists(resource_path('bin', 'ffmpeg')) else 'ffmpeg'
-FFPROBE = resource_path('bin', 'ffprobe') if os.path.exists(resource_path('bin', 'ffprobe')) else 'ffprobe'
+FFMPEG = os.environ.get(
+    'FFMPEG_BINARY',
+    resource_path('bin', 'ffmpeg') if os.path.exists(resource_path('bin', 'ffmpeg')) else 'ffmpeg'
+)
+FFPROBE = os.environ.get(
+    'FFPROBE_BINARY',
+    resource_path('bin', 'ffprobe') if os.path.exists(resource_path('bin', 'ffprobe')) else 'ffprobe'
+)
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.join(DATA_DIR, 'uploads')
@@ -35,6 +42,34 @@ def allowed_file(f):
 
 def valid_id(value):
     return isinstance(value, str) and bool(ID_PATTERN.fullmatch(value))
+
+
+def binary_available(binary):
+    """Return True when a configured binary path or PATH command exists."""
+    if os.path.sep in binary:
+        return os.path.exists(binary) and os.access(binary, os.X_OK)
+    return shutil.which(binary) is not None
+
+
+def missing_dependencies():
+    missing = []
+    if not binary_available(FFMPEG):
+        missing.append('ffmpeg')
+    if not binary_available(FFPROBE):
+        missing.append('ffprobe')
+    return missing
+
+
+def dependency_error_response():
+    missing = missing_dependencies()
+    if not missing:
+        return None
+    return jsonify({
+        'error': (
+            f"Missing required dependency: {', '.join(missing)}. "
+            "Install ffmpeg (for example: brew install ffmpeg) and restart Datamosher."
+        )
+    }), 503
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -325,7 +360,18 @@ def datamosh(input_path, output_path, params):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', missing_dependencies=missing_dependencies())
+
+
+@app.route('/health')
+def health():
+    missing = missing_dependencies()
+    return jsonify({
+        'ok': not missing,
+        'missing_dependencies': missing,
+        'ffmpeg': FFMPEG,
+        'ffprobe': FFPROBE,
+    }), 200 if not missing else 503
 
 
 @app.route('/upload', methods=['POST'])
@@ -347,8 +393,11 @@ def upload():
 
 @app.route('/mosh', methods=['POST'])
 def mosh():
+    dependency_error = dependency_error_response()
+    if dependency_error:
+        return dependency_error
     os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
-    data = request.json
+    data = request.json or {}
     uid = data.get('id')
     filename = data.get('filename')
     params = data.get('params', {})

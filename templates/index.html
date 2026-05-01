@@ -45,6 +45,23 @@
       margin-bottom: 24px;
     }
 
+    .dependency-warning {
+      background: #241400;
+      border: 1px solid #aa6600;
+      border-radius: 10px;
+      color: #ffd18a;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 24px;
+      max-width: 640px;
+      padding: 16px 18px;
+      width: 100%;
+    }
+
+    .dependency-warning code {
+      color: #fff0c2;
+    }
+
     /* Drop zone */
     #dropzone {
       border: 2px dashed #333;
@@ -325,6 +342,13 @@
 
   <h1>DATAMOSHER</h1>
   <p class="subtitle">corrupt video. embrace the glitch.</p>
+
+  {% if missing_dependencies %}
+  <div class="dependency-warning">
+    Missing required dependency: {{ missing_dependencies|join(', ') }}.<br>
+    Install ffmpeg and restart Datamosher. On macOS: <code>brew install ffmpeg</code>
+  </div>
+  {% endif %}
 
   <div class="card">
     <div id="dropzone">

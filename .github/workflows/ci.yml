@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Syntax check
+        run: python -m py_compile app.py
+
+      - name: Flask smoke tests
+        run: |
+          python - <<'PY'
+          from app import app, missing_dependencies
+
+          missing = missing_dependencies()
+          assert not missing, f"Missing dependencies: {missing}"
+
+          client = app.test_client()
+
+          home = client.get('/')
+          assert home.status_code == 200
+          assert b'DATAMOSHER' in home.data
+
+          health = client.get('/health')
+          assert health.status_code == 200
+          assert health.get_json()['ok'] is True
+
+          invalid = client.post('/mosh', json={'id': '../../etc/passwd', 'filename': 'x.mp4'})
+          assert invalid.status_code == 400
+          assert invalid.get_json()['error'] == 'Invalid upload id'
+          PY
