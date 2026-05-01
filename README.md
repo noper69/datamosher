@@ -1,5 +1,9 @@
 # Datamosher
 
+<p align="center">
+  <img src="assets/icon/datamosh-icon-256.png" alt="Datamosher app icon" width="128">
+</p>
+
 A local browser app for glitching videos with real motion-vector datamoshing.
 
 Datamosher runs a small Flask server on your machine, lets you upload a video, applies ffmpeg-based glitch effects, and downloads the rendered MP4.
