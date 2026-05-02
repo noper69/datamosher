@@ -1,32 +1,19 @@
 # Contributing
 
-Thanks for checking out Datamosher.
+Contributions are welcome for bug fixes, UI improvements, documentation, and new glitch effects that fit the project.
 
-## Local setup
+## Development
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+python -m py_compile app.py
 python app.py
 ```
 
-Open `http://127.0.0.1:5555/`.
+Open `http://127.0.0.1:5555/` and test with a short video if your change touches uploads, rendering, downloads, or ffmpeg commands.
 
-## Before submitting changes
+## License
 
-Run:
-
-```bash
-python -m py_compile app.py
-```
-
-Also test at least one small video through the web UI if your change touches rendering, uploads, downloads, or ffmpeg commands.
-
-## Do not commit
-
-- Videos or rendered outputs
-- `data/`, `uploads/`, or `outputs/`
-- `.env` files
-- Credentials, tokens, app-specific passwords, signing certificates, or notarization profiles
-- Build artifacts such as `dist/`, `build/`, `.app`, or `.dmg`
+By contributing, you agree that your contribution will be licensed under the same project license: PolyForm Noncommercial License 1.0.0.

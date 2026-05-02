@@ -4,39 +4,19 @@
   <img src="assets/icon/datamosh-icon-256.png" alt="Datamosher app icon" width="128">
 </p>
 
-A local browser app for glitching videos with real motion-vector datamoshing.
+A local browser app for glitching videos with motion-vector datamoshing.
 
 Datamosher runs a small Flask server on your machine, lets you upload a video, applies ffmpeg-based glitch effects, and downloads the rendered MP4.
 
 Built for the Hermes Agent hackathon.
 
-## Demo
+## Preview
 
 ![Datamosher UI](docs/images/ui.png)
 
-Demo video: TODO - add your YouTube/Vimeo/Loom/GitHub Release link here after recording the submission demo.
-
-Suggested demo flow:
-
-1. Start the app with `python app.py`.
-2. Open `http://127.0.0.1:5555/`.
-3. Upload a short video with obvious hard cuts and motion.
-4. Choose `Motion Datamosh`.
-5. Render and show the before/after output.
-
-Screenshots can go in `docs/images/`. Avoid committing large raw videos to git.
-
-## Hermes Agent Hackathon
-
-Datamosher was built with Hermes Agent as an AI coding partner. Hermes helped iterate on the Flask app, the ffmpeg/MPEG4 datamoshing pipeline, macOS packaging experiments, debugging, security cleanup, and open-source release prep.
-
-The main hackathon angle: a practical creative video tool that uses classic motion-vector datamoshing techniques through a simple local web UI.
-
-See `HACKATHON.md` for submission notes, demo guidance, and known limitations.
-
 ## Effects
 
-- Motion Datamosh: MPEG4 P-frame duplication plus I-VOP stripping for real motion-vector smear at scene cuts.
+- Motion Datamosh: MPEG4 P-frame duplication plus I-VOP stripping for motion-vector smear at scene cuts.
 - Pixel Drift: frame echo and blur.
 - Color Bleed: chroma shift with temporal blending.
 - Feedback Loop: phoenix blend, saturation, and sharpening.
@@ -62,7 +42,7 @@ sudo apt install python3 python3-venv ffmpeg
 ## Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/datamosher.git
+git clone https://github.com/noper69/datamosher.git
 cd datamosher
 python3 -m venv .venv
 source .venv/bin/activate
@@ -77,12 +57,6 @@ source .venv/bin/activate
 python app.py
 ```
 
-For Flask debug/reload while developing:
-
-```bash
-FLASK_DEBUG=1 python app.py
-```
-
 Open:
 
 ```text
@@ -94,9 +68,9 @@ The app is local-only by default. It binds to `127.0.0.1`, not the public networ
 ## Usage
 
 1. Open the local web UI.
-2. Upload an MP4/MOV/AVI/MKV/WebM video.
+2. Upload an MP4, MOV, AVI, MKV, or WebM video.
 3. Pick an effect and intensity.
-4. Click the mosh/render button.
+4. Render the effect.
 5. Download the generated MP4.
 
 ## Data and generated files
@@ -160,7 +134,6 @@ If no hard cuts are detected, the app creates artificial split points so one-sho
 - The strongest motion datamosh effect appears when the source video has hard cuts and visible motion.
 - ffmpeg/ffprobe must be installed separately.
 - The app is local-only and is not intended to be deployed publicly as-is.
-- This repository is the open-source Flask web app version, not a packaged macOS `.app` release.
 
 ## Development
 
@@ -183,13 +156,12 @@ Health/dependency check:
 curl http://127.0.0.1:5555/health
 ```
 
-## Security / privacy notes
+## Privacy
 
-- Datamosher does not require API keys, cloud credentials, Apple credentials, or tokens.
-- Uploaded videos stay on your local machine unless you choose to share them.
-- Generated media is ignored by git.
-- Do not run the Flask development server exposed to the public internet.
+Uploaded videos and generated outputs stay on your local machine unless you choose to share them.
 
 ## License
 
-MIT. See `LICENSE`.
+PolyForm Noncommercial License 1.0.0. See `LICENSE`.
+
+Commercial use is not permitted without separate permission.
