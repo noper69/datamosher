@@ -180,14 +180,13 @@ def strip_mpeg4_headers(data, vops):
 
 def datamosh_iframe_removal(input_path, output_path, intensity):
     """
-    Motion-vector datamosh by forcing MPEG4 I-VOPs at cut points, then
-    removing those I-VOPs so later P-VOP motion vectors decode against the
-    previous image.
+    Aggressive motion-vector datamosh by stitching MPEG4 segments while
+    removing the later segments' I-VOP anchor frames.
 
-    The earlier segment-splice version over-emphasized duplicated P-frames,
-    which looked like a freeze with mild corruption. This version keeps the
-    whole clip moving and only creates short prediction breaks at real or
-    generated cut points.
+    This deliberately creates reference mismatches between neighboring video
+    chunks so the next chunk's P-frame motion vectors decode against the
+    previous chunk's image. The result is the classic moving smear/tear effect,
+    not a long frozen-frame hold.
     """
     uid = str(uuid.uuid4())[:6]
     tmp = os.path.dirname(os.path.abspath(input_path))
@@ -204,85 +203,101 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
 
     intensity = max(0.0, min(1.0, float(intensity)))
 
-    # Prefer real scene cuts. If a source clip has no hard cuts, add generated
-    # prediction breaks so demo footage still produces visible motion smears.
-    cuts = [t for t in detect_cuts(input_path, threshold=0.18) if 0.40 < t < dur - 0.35]
-    if not cuts:
-        interval = max(0.9, 2.4 - intensity * 1.1)
-        t = interval
+    # Real cuts are best. For clips without usable hard cuts, create frequent
+    # artificial breakpoints. Higher intensity means more reference mismatches.
+    cuts = [t for t in detect_cuts(input_path, threshold=0.16) if 0.25 < t < dur - 0.25]
+    if len(cuts) < 2:
+        step = max(0.45, 1.35 - intensity * 0.75)
         cuts = []
-        while t < dur - 0.35:
+        t = step
+        while t < dur - 0.25:
             cuts.append(t)
-            t += interval
+            t += step
 
-    # Remove near-duplicates and keep the number of breaks bounded so short
-    # clips stay punchy instead of turning into a long frozen smear.
     clean_cuts = []
     for t in cuts:
-        if not clean_cuts or t - clean_cuts[-1] > 0.45:
+        if not clean_cuts or t - clean_cuts[-1] >= 0.35:
             clean_cuts.append(t)
-    cuts = clean_cuts[:12]
+    cuts = clean_cuts[:20]
 
-    intermediate = os.path.join(tmp, f'{uid}_mpeg4.avi')
-    raw_path = os.path.join(tmp, f'{uid}_raw.m4v')
-    out_raw = os.path.join(tmp, f'{uid}_moshed.m4v')
-    made_files.extend([intermediate, raw_path, out_raw])
+    boundaries = [0.0] + cuts + [dur]
+    segments = []
+    for start, end in zip(boundaries, boundaries[1:]):
+        if end - start >= 0.18:
+            segments.append((start, end))
 
-    # A tiny P-frame hold can make the transition visible, but a large hold is
-    # what caused the unwanted "frozen frame slowly glitching" look.
-    hold_frames = int(round(intensity * 4))
+    if len(segments) < 2:
+        mid = dur / 2
+        segments = [(0.0, mid), (mid, dur)]
+
+    # Tiny anchor hold only. Large values caused the bad freeze-frame look.
+    hold_frames = int(round(intensity * 2))
 
     try:
-        encode_cmd = [
-            FFMPEG, '-y', '-i', input_path,
-            '-c:v', 'mpeg4',
-            '-q:v', '3',
-            '-g', '9999',
-            '-bf', '0',
-            '-pix_fmt', 'yuv420p',
-            '-an',
-        ]
-        if cuts:
-            encode_cmd.extend(['-force_key_frames', ','.join(f'{t:.3f}' for t in cuts)])
-        encode_cmd.append(intermediate)
-        run(encode_cmd)
+        raw_data = []
+        for i, (ss, to) in enumerate(segments):
+            seg_path = os.path.join(tmp, f'{uid}_seg{i}.avi')
+            raw_path = os.path.join(tmp, f'{uid}_raw{i}.m4v')
+            made_files.extend([seg_path, raw_path])
 
-        run([FFMPEG, '-y', '-i', intermediate, '-c:v', 'copy', '-f', 'm4v', raw_path])
+            encode_mpeg4_segment(input_path, seg_path, ss, to, fps, None, None)
+            run([FFMPEG, '-y', '-i', seg_path, '-c:v', 'copy', '-f', 'm4v', raw_path])
 
-        with open(raw_path, 'rb') as f:
-            data = bytearray(f.read())
-        vops = find_ivops(data)
-        if not vops:
-            raise ValueError('No MPEG4 VOP frames found')
+            with open(raw_path, 'rb') as f:
+                data = bytearray(f.read())
+            vops = find_ivops(data)
+            if not vops:
+                raise ValueError(f'No MPEG4 VOP frames found in segment {i}')
+            raw_data.append((data, vops))
+
+        out_raw = os.path.join(tmp, f'{uid}_moshed.m4v')
+        made_files.append(out_raw)
+
+        # Consecutive chunks of slow footage often look too normal because the
+        # motion vectors are close to the previous frame. Interleave distant
+        # chunks so each removed I-VOP creates a stronger reference mismatch.
+        order = [0]
+        if len(raw_data) > 2:
+            left = list(range(1, (len(raw_data) + 1) // 2))
+            right = list(range((len(raw_data) + 1) // 2, len(raw_data)))
+            for pair in zip(right, left):
+                order.extend(pair)
+            longer = right if len(right) > len(left) else left
+            order.extend(longer[len(order[1:]) // 2:])
+            order = list(dict.fromkeys(order))
+            order.extend(i for i in range(len(raw_data)) if i not in order)
+        else:
+            order.extend(range(1, len(raw_data)))
 
         last_p = None
         removed_i = 0
         with open(out_raw, 'wb') as fout:
-            for idx, vop in enumerate(vops):
-                start = vop['pos']
-                end = vops[idx + 1]['pos'] if idx + 1 < len(vops) else len(data)
-                frame = data[start:end]
-
-                if idx == 0:
-                    # Preserve codec headers and the first I-VOP as the decoder anchor.
-                    fout.write(data[:end])
-                elif vop['type'] == 0:
-                    # Remove later I-VOPs. The following P-VOPs will be decoded
-                    # against the previous image, which creates the datamosh smear.
-                    removed_i += 1
+            for out_index, source_index in enumerate(order):
+                data, vops = raw_data[source_index]
+                if out_index == 0:
+                    # First segment includes codec headers and its first I-VOP.
+                    fout.write(data)
+                else:
                     if last_p is not None:
                         for _ in range(hold_frames):
                             fout.write(last_p)
-                    continue
-                else:
-                    fout.write(frame)
 
-                if vop['type'] == 1:
-                    last_p = frame
+                    # Keep only VOP payload from later segments and drop the
+                    # initial I-VOP. This makes following P-VOPs use the old
+                    # reference image, which creates moving datamosh smear.
+                    first_i = next((idx for idx, v in enumerate(vops) if v['type'] == 0), None)
+                    if first_i is None or first_i + 1 >= len(vops):
+                        fout.write(strip_mpeg4_headers(data, vops))
+                    else:
+                        start_after_i = vops[first_i + 1]['pos']
+                        fout.write(data[start_after_i:])
+                        removed_i += 1
+
+                lp = get_last_pvop(data, vops)
+                if lp is not None:
+                    last_p = lp
 
         if removed_i == 0:
-            # This should be rare because we force keyframes, but fail clearly
-            # instead of silently returning a normal-looking transcode.
             raise ValueError('No removable MPEG4 I-VOP frames were created')
 
         run([
@@ -305,7 +320,6 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
                 pass
 
     return output_path
-
 
 def datamosh_pixel_drift(input_path, output_path, intensity):
     blend = 0.3 + intensity * 0.65
