@@ -30,6 +30,7 @@ app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('DATAMOSHER_MAX_UPLOAD_MB'
 
 ALLOWED_EXTENSIONS = {'mp4', 'mov', 'avi', 'mkv', 'webm'}
 ID_PATTERN = re.compile(r'^[a-f0-9]{8}$')
+EVEN_DIMENSIONS_FILTER = 'scale=trunc(iw/2)*2:trunc(ih/2)*2'
 
 
 def ensure_storage_dirs():
@@ -271,6 +272,7 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
             '-f', 'm4v', '-r', str(fps), '-i', out_raw,
             '-i', input_path,
             '-map', '0:v:0', '-map', '1:a:0?',
+            '-vf', EVEN_DIMENSIONS_FILTER,
             '-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast',
             '-c:a', 'aac', '-b:a', '192k',
             '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
@@ -293,6 +295,7 @@ def datamosh_pixel_drift(input_path, output_path, intensity):
     vf = f'tblend=all_mode=average:all_opacity={blend:.2f}'
     if blur > 0.2:
         vf += f',gblur=sigma={blur:.2f}'
+    vf += f',{EVEN_DIMENSIONS_FILTER}'
     subprocess.run([
         FFMPEG, '-y', '-i', input_path,
         '-vf', vf,
@@ -310,7 +313,7 @@ def datamosh_color_bleed(input_path, output_path, intensity):
     cbv = int(intensity * 15)
     crv = -int(intensity * 10)
     blend = 0.2 + intensity * 0.55
-    vf = f'chromashift=cbh={cbh}:cbv={cbv}:crh={crh}:crv={crv},tblend=all_mode=average:all_opacity={blend:.2f}'
+    vf = f'chromashift=cbh={cbh}:cbv={cbv}:crh={crh}:crv={crv},tblend=all_mode=average:all_opacity={blend:.2f},{EVEN_DIMENSIONS_FILTER}'
     subprocess.run([
         FFMPEG, '-y', '-i', input_path,
         '-vf', vf,
@@ -326,7 +329,7 @@ def datamosh_feedback(input_path, output_path, intensity):
     blend = 0.3 + intensity * 0.65
     sat = 1.0 + intensity * 2.5
     sharp = 0.5 + intensity * 1.5
-    vf = f'tblend=all_mode=phoenix:all_opacity={blend:.2f},eq=saturation={sat:.2f},unsharp=5:5:{sharp:.2f}:3:3:0'
+    vf = f'tblend=all_mode=phoenix:all_opacity={blend:.2f},eq=saturation={sat:.2f},unsharp=5:5:{sharp:.2f}:3:3:0,{EVEN_DIMENSIONS_FILTER}'
     subprocess.run([
         FFMPEG, '-y', '-i', input_path,
         '-vf', vf,
