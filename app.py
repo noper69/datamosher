@@ -207,7 +207,9 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
     # artificial breakpoints. Higher intensity means more reference mismatches.
     cuts = [t for t in detect_cuts(input_path, threshold=0.16) if 0.25 < t < dur - 0.25]
     if len(cuts) < 2:
-        step = max(0.45, 1.35 - intensity * 0.75)
+        # Smaller chunks create more I-VOP removals and more visible motion
+        # vector smears. Keep a floor so the output still decodes reliably.
+        step = max(0.28, 0.95 - intensity * 0.58)
         cuts = []
         t = step
         while t < dur - 0.25:
@@ -216,14 +218,14 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
 
     clean_cuts = []
     for t in cuts:
-        if not clean_cuts or t - clean_cuts[-1] >= 0.35:
+        if not clean_cuts or t - clean_cuts[-1] >= 0.22:
             clean_cuts.append(t)
-    cuts = clean_cuts[:20]
+    cuts = clean_cuts[:36]
 
     boundaries = [0.0] + cuts + [dur]
     segments = []
     for start, end in zip(boundaries, boundaries[1:]):
-        if end - start >= 0.18:
+        if end - start >= 0.12:
             segments.append((start, end))
 
     if len(segments) < 2:
@@ -231,7 +233,7 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
         segments = [(0.0, mid), (mid, dur)]
 
     # Tiny anchor hold only. Large values caused the bad freeze-frame look.
-    hold_frames = int(round(intensity * 2))
+    hold_frames = int(round(intensity * 3))
 
     try:
         raw_data = []
@@ -258,14 +260,19 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
         # chunks so each removed I-VOP creates a stronger reference mismatch.
         order = [0]
         if len(raw_data) > 2:
-            left = list(range(1, (len(raw_data) + 1) // 2))
-            right = list(range((len(raw_data) + 1) // 2, len(raw_data)))
-            for pair in zip(right, left):
-                order.extend(pair)
-            longer = right if len(right) > len(left) else left
-            order.extend(longer[len(order[1:]) // 2:])
-            order = list(dict.fromkeys(order))
-            order.extend(i for i in range(len(raw_data)) if i not in order)
+            # Walk through chunks with a large stride so adjacent output chunks
+            # usually come from distant times. This makes the following P-VOPs
+            # decode against a very different reference image, which reads as
+            # stronger classic datamosh smear rather than subtle compression.
+            remaining = set(range(1, len(raw_data)))
+            cursor = 0
+            while remaining:
+                cursor = max(
+                    remaining,
+                    key=lambda idx: min(abs(idx - cursor), len(raw_data) - abs(idx - cursor))
+                )
+                order.append(cursor)
+                remaining.remove(cursor)
         else:
             order.extend(range(1, len(raw_data)))
 
