@@ -203,24 +203,25 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
 
     intensity = max(0.0, min(1.0, float(intensity)))
 
-    # Real cuts are best. For clips without usable hard cuts, create frequent
-    # artificial breakpoints. Higher intensity means more reference mismatches.
-    cuts = [t for t in detect_cuts(input_path, threshold=0.16) if 0.25 < t < dur - 0.25]
-    if len(cuts) < 2:
-        # Smaller chunks create more I-VOP removals and more visible motion
-        # vector smears. Keep a floor so the output still decodes reliably.
-        step = max(0.28, 0.95 - intensity * 0.58)
-        cuts = []
-        t = step
-        while t < dur - 0.25:
-            cuts.append(t)
-            t += step
+    # Real cuts are best, but the slider should still matter on clips without
+    # many hard cuts. Blend real cuts with intensity-controlled artificial
+    # breakpoints: low intensity = fewer, wider chunks; high intensity = many
+    # smaller chunks, which creates more I-VOP removals and visible smears.
+    real_cuts = [t for t in detect_cuts(input_path, threshold=0.16) if 0.25 < t < dur - 0.25]
+    step = max(0.28, 1.55 - intensity * 1.18)
+    artificial_cuts = []
+    t = step
+    while t < dur - 0.25:
+        artificial_cuts.append(t)
+        t += step
 
+    min_spacing = max(0.22, 0.72 - intensity * 0.50)
+    max_cuts = max(2, int(round(4 + intensity * 32)))
     clean_cuts = []
-    for t in cuts:
-        if not clean_cuts or t - clean_cuts[-1] >= 0.22:
+    for t in sorted(real_cuts + artificial_cuts):
+        if not clean_cuts or t - clean_cuts[-1] >= min_spacing:
             clean_cuts.append(t)
-    cuts = clean_cuts[:36]
+    cuts = clean_cuts[:max_cuts]
 
     boundaries = [0.0] + cuts + [dur]
     segments = []
@@ -255,12 +256,12 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
         out_raw = os.path.join(tmp, f'{uid}_moshed.m4v')
         made_files.append(out_raw)
 
-        # Consecutive chunks of slow footage often look too normal because the
-        # motion vectors are close to the previous frame. Interleave distant
-        # chunks so each removed I-VOP creates a stronger reference mismatch.
+        # Low intensity keeps the timeline mostly chronological/subtle. Medium
+        # intensity alternates between near and far chunks. High intensity uses
+        # farthest-chunk jumps for the strongest reference mismatch.
         order = [0]
-        if len(raw_data) > 2:
-            # Walk through chunks with a large stride so adjacent output chunks
+        if len(raw_data) > 2 and intensity >= 0.72:
+            # Walk through chunks with large jumps so adjacent output chunks
             # usually come from distant times. This makes the following P-VOPs
             # decode against a very different reference image, which reads as
             # stronger classic datamosh smear rather than subtle compression.
@@ -273,6 +274,15 @@ def datamosh_iframe_removal(input_path, output_path, intensity):
                 )
                 order.append(cursor)
                 remaining.remove(cursor)
+        elif len(raw_data) > 2 and intensity >= 0.38:
+            left = list(range(1, (len(raw_data) + 1) // 2))
+            right = list(range((len(raw_data) + 1) // 2, len(raw_data)))
+            for pair in zip(right, left):
+                order.extend(pair)
+            longer = right if len(right) > len(left) else left
+            order.extend(longer[len(order[1:]) // 2:])
+            order = list(dict.fromkeys(order))
+            order.extend(i for i in range(len(raw_data)) if i not in order)
         else:
             order.extend(range(1, len(raw_data)))
 
